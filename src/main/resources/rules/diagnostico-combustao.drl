@@ -1,0 +1,28 @@
+package rules;
+
+import pt.isep.sbc.model.SistemaCombustao;
+import pt.isep.sbc.model.Diagnostico;
+
+rule "Regra 3 - Falha Fornecimento Gas"
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("FalhaFornecimentoGas");
+        $d.setConclusao("Falha crítica de combustão devido à falta completa de fornecimento de gás (gás indisponível e ausência de chama).");
+        $d.addRegraAtivada("Regra 3", "Chama não detectada associada a gás indisponível no sistema.");
+        update($d);
+end
+
+rule "Regra 4 - Pressao Gas Insuficiente"
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim", pressaoGasSuficiente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("PressaoGasInsuficiente");
+        $d.setConclusao("Ausência de chama devido a pressão de gás insuficiente, embora haja gás disponível na linha.");
+        $d.addRegraAtivada("Regra 4", "Chama não detectada com gás disponível mas pressão de gás insuficiente.");
+        update($d);
+end

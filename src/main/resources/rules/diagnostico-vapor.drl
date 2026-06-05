@@ -1,0 +1,31 @@
+package rules;
+
+import pt.isep.sbc.model.SistemaVapor;
+import pt.isep.sbc.model.SistemaCombustao;
+import pt.isep.sbc.model.Diagnostico;
+
+rule "Regra 1 - Producao Insuficiente Por Combustao"
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo")
+        $c : SistemaCombustao(combustaoNormal == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ProducaoInsuficientePorCombustao");
+        $d.setConclusao("A produção de vapor está insuficiente devido a uma falha detectada no sistema de combustão (combustão anormal).");
+        $d.addRegraAtivada("Regra 1", "Pressão, temperatura e caudal baixos no sistema de vapor, associados a uma combustão não normal.");
+        update($d);
+end
+
+rule "Regra 2 - Producao Insuficiente Por Turbina"
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo", turbinaForneceCalorSuficiente == "Nao")
+        $c : SistemaCombustao(combustaoNormal == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ProducaoInsuficientePorTurbina");
+        $d.setConclusao("A produção de vapor está insuficiente devido a calor insuficiente fornecido pela turbina, apesar de a combustão estar normal.");
+        $d.addRegraAtivada("Regra 2", "Pressão, temperatura e caudal baixos no sistema de vapor, com combustão normal, mas sem calor suficiente fornecido pela turbina.");
+        update($d);
+end
