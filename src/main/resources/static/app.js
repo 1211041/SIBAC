@@ -377,18 +377,40 @@
         await delay(400);
         removeTyping(typing3);
 
-        addBotMessage('Deseja realizar um <strong>novo diagnóstico</strong>?');
+        addBotMessage('Deseja realizar um <strong>novo diagnóstico</strong> ou <strong>terminar</strong>?');
 
         await delay(200);
 
+        const actionsContainer = document.createElement('div');
+        actionsContainer.className = 'options-container';
+
         const restartBtn = document.createElement('button');
-        restartBtn.className = 'restart-btn';
-        restartBtn.id = 'restartBtn';
+        restartBtn.className = 'option-btn';
         restartBtn.innerHTML = '🔄 Novo Diagnóstico';
         restartBtn.addEventListener('click', () => {
-            startConversation();
+            actionsContainer.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+            restartBtn.classList.add('selected');
+            addUserMessage('Novo Diagnóstico');
+            setTimeout(() => {
+                startConversation();
+            }, 400);
         });
-        chatMessages.appendChild(restartBtn);
+
+        const endBtn = document.createElement('button');
+        endBtn.className = 'option-btn';
+        endBtn.innerHTML = 'Terminar';
+        endBtn.addEventListener('click', () => {
+            actionsContainer.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+            endBtn.classList.add('selected');
+            addUserMessage('Terminar');
+            setTimeout(() => {
+                addBotMessage('Obrigado por utilizar o chatbot SIBAC!Sessão terminada. Pode fechar esta página.');
+            }, 400);
+        });
+
+        actionsContainer.appendChild(restartBtn);
+        actionsContainer.appendChild(endBtn);
+        chatMessages.appendChild(actionsContainer);
         scrollToBottom();
     }
 
