@@ -26,3 +26,15 @@ rule "Regra 4 - Pressao Gas Insuficiente"
         $d.addRegraAtivada("Regra 4", "Chama não detectada com gás disponível mas pressão de gás insuficiente.");
         update($d);
 end
+
+rule "Regra 5 - Avaria Sistema Ignicao"
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim", pressaoGasSuficiente == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("AvariaIgnicao");
+        $d.setConclusao("Ausência de chama apesar de gás disponível e pressão suficiente, indicando avaria no sistema de ignição.");
+        $d.addRegraAtivada("Regra 5", "Chama não detectada com gás disponível e pressão de gás suficiente, sugerindo falha no sistema de ignição.");
+        update($d);
+end

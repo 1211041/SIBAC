@@ -29,3 +29,40 @@ rule "Regra 2 - Producao Insuficiente Por Turbina"
         $d.addRegraAtivada("Regra 2", "Pressão, temperatura e caudal baixos no sistema de vapor, com combustão normal, mas sem calor suficiente fornecido pela turbina.");
         update($d);
 end
+
+rule "Regra 6 - Sobreaquecimento Vapor"
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("SobreaquecimentoVapor");
+        $d.setConclusao("Sobreaquecimento do vapor detetado devido a pressão e temperatura excessivamente elevadas na caldeira.");
+        $d.addRegraAtivada("Regra 6", "Pressão e temperatura altas no sistema de vapor, indicando sobreaquecimento (pressão excessiva).");
+        update($d);
+end
+
+rule "Regra 7 - Caudal Vapor Anormal"
+    when
+        $v : SistemaVapor(caudal == "Alto", pressao == "Normal", temperatura == "Normal")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("CaudalVaporAnormal");
+        $d.setConclusao("Caudal de vapor anormalmente elevado com pressão e temperatura normais, indicando possível anomalia no controlo de caudal.");
+        $d.addRegraAtivada("Regra 7", "Caudal alto no sistema de vapor com pressão e temperatura normais, sugerindo caudal excessivo.");
+        update($d);
+end
+
+rule "Regra 8 - Queda Brusca Pressao Vapor"
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal", turbinaForneceCalorSuficiente == "Sim")
+        $c : SistemaCombustao(combustaoNormal == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("QuedaPressaoVapor");
+        $d.setConclusao("Queda brusca de pressão de vapor com temperatura, caudal e combustão normais, sugerindo possível fuga no sistema.");
+        $d.addRegraAtivada("Regra 8", "Pressão baixa no sistema de vapor com temperatura e caudal normais, combustão normal e calor da turbina suficiente, indicando possível fuga.");
+        update($d);
+end
