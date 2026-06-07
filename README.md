@@ -45,9 +45,13 @@ c:\Faculdade\SIBAC\SIBAC\
         └── resources/
             ├── META-INF/
             │   └── kmodule.xml                 # Definição do KIE Module e Session
-            └── rules/
-                ├── diagnostico-vapor.drl       # Regras do sistema de vapor (Regra 1 & 2)
-                └── diagnostico-combustao.drl   # Regras da combustão (Regra 3 & 4)
+            ├── rules/
+            │   ├── diagnostico-vapor.drl       # Regras do sistema de vapor (Regra 1 & 2)
+            │   └── diagnostico-combustao.drl   # Regras da combustão (Regra 3 & 4)
+            └── static/                         # Interface Web (HTML, CSS e JavaScript)
+                ├── index.html                  # Interface gráfica (Chatbot)
+                ├── style.css                   # Estilos da interface web
+                └── app.js                      # Lógica do chatbot e integração com a API REST
 ```
 
 ---
@@ -82,13 +86,32 @@ Foram implementadas as quatro regras de inferência iniciais na pasta `src/main/
     ```bash
     mvn spring-boot:run
     ```
-    A API REST estará operacional no endereço `http://localhost:8080`.
+    A API REST e a Interface Web estarão operacionais no endereço `http://localhost:8080`.
+
+---
+
+## 🌐 Interface Web (Chatbot de Diagnóstico Interativo)
+
+O projeto inclui agora uma **Interface Web interativa** no formato de Chatbot, permitindo realizar diagnósticos guiados passo a passo diretamente no navegador, sem necessidade de utilizar ferramentas externas como o Postman.
+
+### Como Aceder
+Com a aplicação em execução (`mvn spring-boot:run`), abra o seu navegador web e aceda a:
+*   👉 **[http://localhost:8080/](http://localhost:8080/)** (ou `http://localhost:8080/index.html`)
+
+### Funcionamento do Chatbot
+1.  **Conversa Guiada**: O chatbot interage com o utilizador, perguntando sobre os valores/estados das variáveis do sistema (pressão, temperatura, caudal, etc.) para ambos os subsistemas (Vapor e Combustão).
+2.  **Barra de Progresso**: Indica o estado do preenchimento das 8 variáveis necessárias para o diagnóstico.
+3.  **Processamento Automático**: Ao responder à última pergunta, o chatbot envia automaticamente os dados para a API REST (`/api/diagnostico`).
+4.  **Apresentação do Resultado**:
+    *   Se for detetada uma **anomalia**, o chatbot mostra a conclusão em destaque (vermelho), descrevendo o tipo de anomalia, o problema identificado, as regras ativadas e o raciocínio/explicação pericial.
+    *   Se **não houver anomalias**, o chatbot apresenta uma mensagem de conformidade (verde).
+5.  **Opção de Reinício**: Permite iniciar um novo diagnóstico de imediato ou terminar a sessão.
 
 ---
 
 ## 📮 Exemplos de Pedidos REST (Postman)
 
-Faça um pedido `POST` para `http://localhost:8080/api/diagnostico` com o cabeçalho `Content-Type: application/json`.
+Se preferir testar diretamente a API REST, faça um pedido `POST` para `http://localhost:8080/api/diagnostico` com o cabeçalho `Content-Type: application/json`.
 
 ### Caso 1: Ativação da Regra 1 (Produção Insuficiente por Combustão)
 *   **JSON de Entrada (Request)**:
