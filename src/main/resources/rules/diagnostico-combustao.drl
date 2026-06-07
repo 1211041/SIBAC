@@ -3,38 +3,538 @@ package rules;
 import pt.isep.sbc.model.SistemaCombustao;
 import pt.isep.sbc.model.Diagnostico;
 
-rule "Regra 3 - Falha Fornecimento Gas"
+/*
+ * ============================================================
+ *  SIBAC — Base de Conhecimento: Diagnóstico do Sistema de Combustão
+ *  Versão 2 — cobertura total do diagrama de fluxo do relatório
+ * ============================================================
+ *
+ *  BLOCO A — Ausência de chama (7 regras)
+ *    C-A.1  Falha total no fornecimento de gás
+ *    C-A.2  Pressão de gás insuficiente
+ *    C-A.3  Válvulas de gás fechadas
+ *    C-A.4  Sistema de ignição inativo
+ *    C-A.5  Falha no detetor de chama (falso negativo)
+ *    C-A.6  Mistura ar/combustível inadequada impede ignição
+ *    C-A.7  Falha não identificada no circuito de combustão
+ *
+ *  BLOCO B.1 — Chama presente mas INSTÁVEL (5 regras)
+ *    C-B1.1 Instabilidade no fornecimento de gás
+ *    C-B1.2 Mistura ar/combustível desajustada
+ *    C-B1.3 Anomalia nos queimadores
+ *    C-B1.4 Leitura incorreta do detetor de chama
+ *    C-B1.5 Instabilidade associada ao sistema de controlo
+ *
+ *  BLOCO B.2 — Chama ESTÁVEL, temperatura de combustão NORMAL (4 regras)
+ *    C-B2.1 Excesso de combustível comandado pelo controlo
+ *    C-B2.2 Alimentação de combustível insuficiente
+ *    C-B2.3 Falha no sistema de controlo de combustão
+ *    C-B2.4 Sistema em funcionamento normal (verificação manual)
+ *
+ *  BLOCO B.3 — Chama ESTÁVEL, temperatura BAIXA (3 regras)
+ *    C-B3.1 Combustão insuficiente por baixo caudal de gás
+ *    C-B3.2 Combustão arrefecida por excesso de ar
+ *    C-B3.3 Combustão insuficiente por controlo incorreto
+ *
+ *  BLOCO B.4 — Chama ESTÁVEL, temperatura ALTA (3 regras)
+ *    C-B4.1 Combustão excessiva por excesso de combustível
+ *    C-B4.2 Combustão excessiva por défice de ar
+ *    C-B4.3 Erro de leitura da temperatura
+ * ============================================================
+ */
+
+
+// ════════════════════════════════════════════════════════════
+//  BLOCO A — Ausência de chama
+// ════════════════════════════════════════════════════════════
+
+rule "C-A.1 — Falha Total no Fornecimento de Gás"
+    salience 100
     when
         $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
         $d.setProblema("FalhaFornecimentoGas");
-        $d.setConclusao("Falha crítica de combustão devido à falta completa de fornecimento de gás (gás indisponível e ausência de chama).");
-        $d.addRegraAtivada("Regra 3", "Chama não detectada associada a gás indisponível no sistema.");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Falha crítica: ausência de chama por falta total de gás na linha. " +
+                        "Ação: verificar fornecimento externo de gás, válvulas principais de seccionamento " +
+                        "e instrumentos de pressão da rede de gás.");
+        $d.addRegraAtivada("C-A.1",
+                "Chama não detetada + gás indisponível → corte total de fornecimento de combustível.");
         update($d);
 end
 
-rule "Regra 4 - Pressao Gas Insuficiente"
+rule "C-A.2 — Pressão Insuficiente de Gás"
+    salience 95
     when
-        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim", pressaoGasSuficiente == "Nao")
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim",
+                              pressaoGasSuficiente == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
         $d.setProblema("PressaoGasInsuficiente");
-        $d.setConclusao("Ausência de chama devido a pressão de gás insuficiente, embora haja gás disponível na linha.");
-        $d.addRegraAtivada("Regra 4", "Chama não detectada com gás disponível mas pressão de gás insuficiente.");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Gás disponível mas pressão insuficiente para manter/iniciar ignição. " +
+                        "Ação: verificar reguladores de pressão de gás, filtros e válvulas de controlo " +
+                        "de pressão na linha de gás.");
+        $d.addRegraAtivada("C-A.2",
+                "Chama ausente, gás disponível mas pressão insuficiente → problema no regulador de pressão.");
         update($d);
 end
 
-rule "Regra 5 - Avaria Sistema Ignicao"
+rule "C-A.3 — Falha nas Válvulas de Gás"
+    salience 95
     when
-        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim", pressaoGasSuficiente == "Sim")
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim",
+                              pressaoGasSuficiente == "Sim", valvulasGasAbertas == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("ValvulasGasFechadasOuMalPosicionadas");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Gás disponível com pressão suficiente mas válvulas de gás fechadas — " +
+                        "o gás não chega aos queimadores. " +
+                        "Ação: verificar estado das válvulas solenóide/on-off do manifold de gás " +
+                        "e respetivos atuadores; confirmar posição (aberta/fechada).");
+        $d.addRegraAtivada("C-A.3",
+                "Chama ausente, gás e pressão OK, mas válvulas de gás fechadas ou mal posicionadas.");
+        update($d);
+end
+
+rule "C-A.4 — Falha no Sistema de Ignição"
+    salience 90
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim",
+                              pressaoGasSuficiente == "Sim", valvulasGasAbertas == "Sim",
+                              sistemaIgnicaoAtivo == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
         $d.setProblema("AvariaIgnicao");
-        $d.setConclusao("Ausência de chama apesar de gás disponível e pressão suficiente, indicando avaria no sistema de ignição.");
-        $d.addRegraAtivada("Regra 5", "Chama não detectada com gás disponível e pressão de gás suficiente, sugerindo falha no sistema de ignição.");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Condições para ignição presentes (gás, pressão e válvulas OK) " +
+                        "mas sistema de ignição inativo. " +
+                        "Ação: verificar eléctrodos de ignição, transformador de ignição " +
+                        "e cabos de alta tensão.");
+        $d.addRegraAtivada("C-A.4",
+                "Chama ausente, todas as condições OK mas ignição inativa → avaria na ignição.");
         update($d);
 end
+
+rule "C-A.5 — Falha no Detetor de Chama (Falso Negativo)"
+    salience 85
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim",
+                              pressaoGasSuficiente == "Sim", valvulasGasAbertas == "Sim",
+                              sistemaIgnicaoAtivo == "Sim", detetorChamaFuncional == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("FalhaDetetorChama");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama pode estar presente mas não ser detetada (detetor com falha). " +
+                        "Ação: inspecionar detetor de chama (UV/IR), verificar limpeza da janela " +
+                        "ótica e cabo de sinal. " +
+                        "ATENÇÃO: situação de risco — seguir procedimento de segurança antes de intervir.");
+        $d.addRegraAtivada("C-A.5",
+                "Chama não detetada, ignição ativa e gás OK mas detetor com falha → falso negativo.");
+        update($d);
+end
+
+rule "C-A.6 — Mistura Ar/Combustível Inadequada Impede Ignição"
+    salience 82
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim",
+                              pressaoGasSuficiente == "Sim", valvulasGasAbertas == "Sim",
+                              sistemaIgnicaoAtivo == "Sim", detetorChamaFuncional == "Sim",
+                              relacaoArCombustivelCorreta == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("MisturaArCombustivelImpede");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Detetor funcional e ignição ativa mas relação ar/combustível incorreta impede a ignição. " +
+                        "A mistura está fora dos limites inflamáveis (rica ou pobre em excesso). " +
+                        "Ação: verificar controlador de mistura, dampers de ar de combustão " +
+                        "e caudal de gás nos queimadores.");
+        $d.addRegraAtivada("C-A.6",
+                "Chama ausente, todos os sistemas OK mas mistura ar/combustível incorreta → ignição impossível.");
+        update($d);
+end
+
+rule "C-A.7 — Falha Não Identificada no Circuito de Combustão"
+    salience 70
+    when
+        $c : SistemaCombustao(chamaDetetada == "Nao", gasDisponivel == "Sim",
+                              pressaoGasSuficiente == "Sim", valvulasGasAbertas == "Sim",
+                              sistemaIgnicaoAtivo == "Sim", detetorChamaFuncional == "Sim",
+                              relacaoArCombustivelCorreta == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("FalhaNaoIdentificadaCircuitoCombustao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Todos os parâmetros verificados reportam estado normal mas a chama não é detetada. " +
+                        "Falha no circuito de combustão não identificada automaticamente. " +
+                        "Necessita verificação manual pelo técnico: inspecionar queimadores, " +
+                        "circuito de gás e integridade do sistema de segurança de chama.");
+        $d.addRegraAtivada("C-A.7",
+                "Chama ausente com todos os sistemas OK → causa não identificada, verificação manual.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  BLOCO B.1 — Chama PRESENTE mas INSTÁVEL
+// ════════════════════════════════════════════════════════════
+
+rule "C-B1.1 — Instabilidade no Fornecimento de Gás"
+    salience 95
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Nao",
+                              pressaoGasEstavel == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("InstabilidadeFornecimentoGas");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama instável causada por flutuações de pressão no fornecimento de gás. " +
+                        "Ação: verificar reguladores de pressão de gás, filtros, " +
+                        "e estabilidade do fornecimento externo. Confirmar ausência de variações " +
+                        "de carga na rede de gás.");
+        $d.addRegraAtivada("C-B1.1",
+                "Chama instável com pressão de gás instável → flutuação no fornecimento.");
+        update($d);
+end
+
+rule "C-B1.2 — Mistura Ar/Combustível Desajustada (Chama Instável)"
+    salience 90
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Nao",
+                              pressaoGasEstavel == "Sim",
+                              relacaoArCombustivelCorreta == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("MisturaArCombustivelDesajustada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama instável com pressão de gás estável mas relação ar/combustível incorreta. " +
+                        "A mistura desajustada provoca oscilação da chama. " +
+                        "Ação: recalibrar controlador de combustão, verificar analisadores de O₂ " +
+                        "e ajustar dampers de ar de combustão.");
+        $d.addRegraAtivada("C-B1.2",
+                "Chama instável, pressão de gás estável, mistura ar/combustível incorreta → desajuste de mistura.");
+        update($d);
+end
+
+rule "C-B1.3 — Anomalia nos Queimadores"
+    salience 85
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Nao",
+                              pressaoGasEstavel == "Sim",
+                              relacaoArCombustivelCorreta == "Sim",
+                              queimadoresFuncionamCorretamente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("AnomaliaQueimadores");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama instável com pressão e mistura OK mas queimadores com falha. " +
+                        "Indica entupimento, desgaste ou sujidade nos bicos injetores. " +
+                        "Ação: inspecionar os queimadores, verificar entupimentos nos bicos " +
+                        "e limpar ou substituir conforme necessário.");
+        $d.addRegraAtivada("C-B1.3",
+                "Chama instável, gás e mistura OK, queimadores com falha → anomalia nos queimadores.");
+        update($d);
+end
+
+rule "C-B1.4 — Leitura Incorreta do Detetor de Chama"
+    salience 80
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Nao",
+                              pressaoGasEstavel == "Sim",
+                              relacaoArCombustivelCorreta == "Sim",
+                              queimadoresFuncionamCorretamente == "Sim",
+                              detetorChamaFuncional == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("LeituraIncorretaDetetorChama");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama possivelmente estável mas detetor a reportar oscilações (leitura incorreta). " +
+                        "Pode ser sujidade na janela ótica, degradação do sensor UV/IR " +
+                        "ou ruído no sinal do detetor. " +
+                        "Ação: limpar janela ótica do detetor, verificar sinal de saída " +
+                        "e calibrar ou substituir o detetor.");
+        $d.addRegraAtivada("C-B1.4",
+                "Chama instável aparente, todos os sistemas OK mas detetor com falha → leitura incorreta.");
+        update($d);
+end
+
+rule "C-B1.5 — Instabilidade Associada ao Sistema de Controlo da Combustão"
+    salience 75
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Nao",
+                              pressaoGasEstavel == "Sim",
+                              relacaoArCombustivelCorreta == "Sim",
+                              queimadoresFuncionamCorretamente == "Sim",
+                              detetorChamaFuncional == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("InstabilidadeSistemaControloCombustao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama instável sem causa mecânica identificada — todos os componentes reportam OK. " +
+                        "Instabilidade provavelmente associada ao sistema de controlo da combustão " +
+                        "(loop de controlo a oscilar, parâmetros PID desajustados). " +
+                        "Ação: verificar parâmetros PID do controlador de combustão, " +
+                        "sinais de realimentação e modo de operação (auto/manual).");
+        $d.addRegraAtivada("C-B1.5",
+                "Chama instável, todos os sistemas OK → instabilidade no sistema de controlo.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  BLOCO B.2 — Chama ESTÁVEL, Temperatura NORMAL
+//  (Verificar consumo de combustível e controlo)
+// ════════════════════════════════════════════════════════════
+
+rule "C-B2.1 — Excesso de Combustível Comandado pelo Controlo"
+    salience 85
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Normal",
+                              consumoCombustivel == "Alto")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("ExcessoCombustivelComandadoControlo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama estável e temperatura adequada, mas consumo de combustível acima do esperado. " +
+                        "O sistema de controlo está a comandar abertura excessiva da válvula de gás. " +
+                        "Ação: verificar setpoint de carga, calibração do controlador de combustão " +
+                        "e sensor de temperatura do processo que serve de realimentação.");
+        $d.addRegraAtivada("C-B2.1",
+                "Chama estável, temperatura OK, consumo de gás elevado → excesso comandado pelo controlo.");
+        update($d);
+end
+
+rule "C-B2.2 — Alimentação de Combustível Insuficiente"
+    salience 85
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Normal",
+                              consumoCombustivel == "Baixo")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("AlimentacaoCombustivelInsuficiente");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama estável com temperatura adequada, mas consumo de combustível abaixo do esperado. " +
+                        "A caldeira está a operar com carga reduzida ou há restrição no fornecimento de gás. " +
+                        "Ação: verificar válvula de controlo de gás, disponibilidade de gás " +
+                        "e balanço de carga da instalação.");
+        $d.addRegraAtivada("C-B2.2",
+                "Chama estável, temperatura OK, consumo de gás baixo → alimentação insuficiente ou carga reduzida.");
+        update($d);
+end
+
+rule "C-B2.3 — Falha no Sistema de Controlo de Combustão"
+    salience 80
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Normal",
+                              consumoCombustivel == "Normal",
+                              sistemaControloCombustaoCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("FalhaControloCombustao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Chama estável com temperatura e consumo normais, mas o sistema de controlo " +
+                        "da combustão não está a atuar corretamente. " +
+                        "Risco de perda de controlo automático com degradação futura da eficiência. " +
+                        "Ação: verificar controlador (DCS/PLC), sinais de realimentação (O₂, temperatura) " +
+                        "e forçar modo manual temporariamente se necessário.");
+        $d.addRegraAtivada("C-B2.3",
+                "Chama estável, temperatura e consumo OK, mas controlador de combustão com falha.");
+        update($d);
+end
+
+rule "C-B2.4 — Sistema de Combustão em Funcionamento Normal (Verificação Manual)"
+    salience 60
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Normal",
+                              consumoCombustivel == "Normal",
+                              sistemaControloCombustaoCorreto == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("SistemaNormalNecessitaVerificacao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("O sistema de combustão reporta parâmetros normais: chama estável, " +
+                        "temperatura e consumo dentro dos valores esperados, controlo a funcionar. " +
+                        "A anomalia reportada não foi confirmada pelo sistema de diagnóstico. " +
+                        "Necessita verificação manual para identificar a causa original do alerta.");
+        $d.addRegraAtivada("C-B2.4",
+                "Chama estável, temperatura normal, consumo normal e controlo OK → sistema em funcionamento normal.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  BLOCO B.3 — Chama ESTÁVEL, Temperatura BAIXA
+//  (Combustão insuficiente)
+// ════════════════════════════════════════════════════════════
+
+rule "C-B3.1 — Combustão Insuficiente por Baixo Caudal de Gás"
+    salience 85
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Baixa",
+                              caudalGas == "Baixo")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("CombustaoInsuficienteBaixoCaudalGas");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura de combustão baixa causada por caudal de gás insuficiente. " +
+                        "Ação: verificar válvula de controlo de gás, reguladores de pressão, " +
+                        "disponibilidade de gás na rede e setpoint de carga térmica.");
+        $d.addRegraAtivada("C-B3.1",
+                "Chama estável, temperatura baixa, caudal de gás baixo → combustão insuficiente por falta de combustível.");
+        update($d);
+end
+
+rule "C-B3.2 — Combustão Arrefecida por Excesso de Ar"
+    salience 80
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Baixa",
+                              caudalGas != "Baixo",
+                              fluxoArAdequado == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("CombustaoArrefecidaExcessoAr");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura de combustão baixa com caudal de gás adequado mas fluxo de ar em excesso. " +
+                        "O excesso de ar arrefece a câmara de combustão. " +
+                        "Ação: reduzir abertura dos dampers de ar, verificar controlador de excesso de ar " +
+                        "e calibração do analisador de O₂ (evitar excesso de O₂ livre).");
+        $d.addRegraAtivada("C-B3.2",
+                "Chama estável, temperatura baixa, gás adequado mas excesso de ar → arrefecimento da combustão.");
+        update($d);
+end
+
+rule "C-B3.3 — Combustão Insuficiente por Controlo Incorreto"
+    salience 75
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Baixa",
+                              caudalGas != "Baixo",
+                              fluxoArAdequado == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("CombustaoInsuficienteControloIncorreto");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura de combustão baixa com caudal de gás e fluxo de ar adequados. " +
+                        "A causa é provavelmente um controlo de combustão incorreto (setpoint errado " +
+                        "ou lógica de controlo deficiente). " +
+                        "Ação: verificar setpoints do controlador de temperatura, " +
+                        "lógica de modulação e calibração dos sensores de temperatura da câmara.");
+        $d.addRegraAtivada("C-B3.3",
+                "Chama estável, temperatura baixa, gás e ar OK → combustão insuficiente por controlo incorreto.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  BLOCO B.4 — Chama ESTÁVEL, Temperatura ALTA
+//  (Combustão excessiva)
+// ════════════════════════════════════════════════════════════
+
+rule "C-B4.1 — Combustão Excessiva por Excesso de Combustível"
+    salience 85
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Alta",
+                              caudalGas == "Alto")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("CombustaoExcessivaExcessoCombustivel");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura de combustão alta causada por caudal de gás excessivo. " +
+                        "Risco de sobreaquecimento da caldeira e ativação de proteções. " +
+                        "Ação: reduzir setpoint de carga, verificar válvula de controlo de gás " +
+                        "e sistema de proteção por temperatura máxima.");
+        $d.addRegraAtivada("C-B4.1",
+                "Chama estável, temperatura alta, caudal de gás elevado → excesso de combustível na câmara.");
+        update($d);
+end
+
+rule "C-B4.2 — Combustão Excessiva por Défice de Ar"
+    salience 80
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Alta",
+                              caudalGas != "Alto",
+                              fluxoArAdequado == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("CombustaoExcessivaDeficeAr");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura de combustão alta com caudal de gás normal mas fluxo de ar insuficiente. " +
+                        "O défice de ar concentra a combustão, elevando a temperatura localmente " +
+                        "e podendo gerar CO. " +
+                        "Ação: aumentar abertura dos dampers de ar, verificar ventiladores/sopradores " +
+                        "e filtros de ar de combustão.");
+        $d.addRegraAtivada("C-B4.2",
+                "Chama estável, temperatura alta, gás normal mas fluxo de ar insuficiente → défice de ar.");
+        update($d);
+end
+
+rule "C-B4.3 — Erro de Leitura da Temperatura de Combustão"
+    salience 70
+    when
+        $c : SistemaCombustao(chamaDetetada == "Sim", chamaEstavel == "Sim",
+                              temperaturaCombustao == "Alta",
+                              caudalGas != "Alto",
+                              fluxoArAdequado == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("ErroLeituraTemperaturaCombustao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura de combustão reportada como alta, mas caudal de gás e fluxo de ar são normais. " +
+                        "Indica provável erro de leitura do sensor de temperatura da câmara de combustão. " +
+                        "Ação: verificar termopar/PT100 da câmara, cabo e transmissor associado; " +
+                        "comparar com leitura de termómetro de referência.");
+        $d.addRegraAtivada("C-B4.3",
+                "Chama estável, temperatura alta mas gás e ar OK → erro de leitura do sensor de temperatura.");
+        update($d);
+end
+
+// ── Fallback Geral da Combustão ──────────────────────────────
+rule "C-99.1 — Diagnóstico de Combustão Inconclusivo (Verificação Manual)"
+    salience 1
+    when
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
+        $d.setProblema("DiagnosticoCombustaoInconclusivo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Não foi possível identificar a causa exata para a instabilidade ou comportamento anormal da combustão. " +
+                        "Os parâmetros analisados não correspondem a nenhuma falha padrão catalogada. " +
+                        "Ação: efetuar verificação visual e testes de calibração manual aos queimadores e válvulas de gás.");
+        $d.addRegraAtivada("C-99.1",
+                "Sintomas na combustão presentes mas inconclusivos → verificação manual necessária.");
+        update($d);
+end
+

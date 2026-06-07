@@ -46,8 +46,8 @@ c:\Faculdade\SIBAC\SIBAC\
             ├── META-INF/
             │   └── kmodule.xml                 # Definição do KIE Module e Session
             ├── rules/
-            │   ├── diagnostico-vapor.drl       # Regras do sistema de vapor (Regra 1 & 2)
-            │   └── diagnostico-combustao.drl   # Regras da combustão (Regra 3 & 4)
+            │   ├── diagnostico-vapor.drl       # Regras completas de diagnóstico do sistema de vapor
+            │   └── diagnostico-combustao.drl   # Regras completas de diagnóstico da combustão
             └── static/                         # Interface Web (HTML, CSS e JavaScript)
                 ├── index.html                  # Interface gráfica (Chatbot)
                 ├── style.css                   # Estilos da interface web
@@ -58,19 +58,21 @@ c:\Faculdade\SIBAC\SIBAC\
 
 ## ⚙️ Regras do Motor Pericial (Drools)
 
-Foram implementadas as quatro regras de inferência iniciais na pasta `src/main/resources/rules/`:
+O motor pericial contém uma **base de conhecimento completa** que cobre a totalidade dos diagramas de fluxo do projeto, totalizando dezenas de regras de inferência estruturadas por grupos e blocos lógicos nos ficheiros DRL.
+
+Abaixo destacam-se os exemplos das regras principais de triagem e diagnóstico para cada subsistema:
 
 ### 1. Sistema de Vapor (`diagnostico-vapor.drl`)
-*   **Regra 1 - Produção Insuficiente por Combustão**:
-    Se pressão for `Baixa`, temperatura for `Baixa`, caudal for `Baixo` **E** a combustão estiver `Nao` normal, então infere que o problema é `ProducaoInsuficientePorCombustao`.
-*   **Regra 2 - Produção Insuficiente por Turbina**:
-    Se pressão for `Baixa`, temperatura for `Baixa`, caudal for `Baixo`, combustão estiver `Sim` (normal) **E** a turbina `Nao` fornece calor suficiente, então infere que o problema é `ProducaoInsuficientePorTurbina`.
+*   **Regra V-1.1 — Produção Insuficiente por Combustão Anormal**:
+    Se a pressão for `Baixa`, a temperatura for `Baixa`, o caudal for `Baixo` **E** a combustão estiver `Nao` normal, então infere-se que o problema é `ProducaoInsuficientePorCombustao`.
+*   **Regra V-1.2 — Produção Insuficiente por Turbina sem Calor Suficiente**:
+    Se a pressão for `Baixa`, a temperatura for `Baixa`, o caudal for `Baixo`, a combustão estiver `Sim` (normal) **E** a turbina `Nao` fornece calor suficiente, então infere-se que o problema é `ProducaoInsuficientePorTurbina`.
 
 ### 2. Sistema de Combustão (`diagnostico-combustao.drl`)
-*   **Regra 3 - Falha no Fornecimento de Gás**:
-    Se chama detectada for `Nao` **E** o gás estiver `Nao` disponível, então infere que o problema é `FalhaFornecimentoGas`.
-*   **Regra 4 - Pressão de Gás Insuficiente**:
-    Se chama detectada for `Nao`, o gás estiver `Sim` disponível **E** a pressão do gás for `Nao` suficiente, então infere que o problema é `PressaoGasInsuficiente`.
+*   **Regra C-A.1 — Falha Total no Fornecimento de Gás**:
+    Se a chama detetada for `Nao` **E** o gás estiver `Nao` disponível, então infere-se que o problema é `FalhaFornecimentoGas`.
+*   **Regra C-A.2 — Pressão Insuficiente de Gás**:
+    Se a chama detetada for `Nao`, o gás estiver `Sim` disponível **E** a pressão do gás for `Nao` suficiente, então infere-se que o problema é `PressaoGasInsuficiente`.
 
 ---
 
@@ -86,7 +88,7 @@ Foram implementadas as quatro regras de inferência iniciais na pasta `src/main/
     ```bash
     mvn spring-boot:run
     ```
-    A API REST e a Interface Web estarão operacionais no endereço `http://localhost:8080`.
+    A API REST e a Interface Web estarão operacionais no endereço `http://localhost:8085`.
 
 ---
 
@@ -96,135 +98,14 @@ O projeto inclui agora uma **Interface Web interativa** no formato de Chatbot, p
 
 ### Como Aceder
 Com a aplicação em execução (`mvn spring-boot:run`), abra o seu navegador web e aceda a:
-*   👉 **[http://localhost:8080/](http://localhost:8080/)** (ou `http://localhost:8080/index.html`)
+*   👉 **[http://localhost:8085/](http://localhost:8085/)** (ou `http://localhost:8085/index.html`)
 
 ### Funcionamento do Chatbot
 1.  **Conversa Guiada**: O chatbot interage com o utilizador, perguntando sobre os valores/estados das variáveis do sistema (pressão, temperatura, caudal, etc.) para ambos os subsistemas (Vapor e Combustão).
-2.  **Barra de Progresso**: Indica o estado do preenchimento das 8 variáveis necessárias para o diagnóstico.
+2.  **Barra de Progresso**: Indica dinamicamente o estado do preenchimento das variáveis do diagnóstico consoante o caminho e ramo de decisão selecionado.
 3.  **Processamento Automático**: Ao responder à última pergunta, o chatbot envia automaticamente os dados para a API REST (`/api/diagnostico`).
 4.  **Apresentação do Resultado**:
     *   Se for detetada uma **anomalia**, o chatbot mostra a conclusão em destaque (vermelho), descrevendo o tipo de anomalia, o problema identificado, as regras ativadas e o raciocínio/explicação pericial.
     *   Se **não houver anomalias**, o chatbot apresenta uma mensagem de conformidade (verde).
 5.  **Opção de Reinício**: Permite iniciar um novo diagnóstico de imediato ou terminar a sessão.
 
----
-
-## 📮 Exemplos de Pedidos REST (Postman)
-
-Se preferir testar diretamente a API REST, faça um pedido `POST` para `http://localhost:8080/api/diagnostico` com o cabeçalho `Content-Type: application/json`.
-
-### Caso 1: Ativação da Regra 1 (Produção Insuficiente por Combustão)
-*   **JSON de Entrada (Request)**:
-    ```json
-    {
-      "sistemaVapor": {
-        "pressao": "Baixa",
-        "temperatura": "Baixa",
-        "caudal": "Baixo",
-        "turbinaForneceCalorSuficiente": "Nao"
-      },
-      "sistemaCombustao": {
-        "combustaoNormal": "Nao",
-        "chamaDetetada": "Sim",
-        "gasDisponivel": "Sim",
-        "pressaoGasSuficiente": "Sim"
-      }
-    }
-    ```
-*   **JSON de Saída (Response)**:
-    ```json
-    {
-      "tipoAnomalia": "Anomalia na Produção de Vapor",
-      "problema": "ProducaoInsuficientePorCombustao",
-      "conclusao": "A produção de vapor está insuficiente devido a uma falha detectada no sistema de combustão (combustão anormal).",
-      "regrasAtivadas": ["Regra 1"],
-      "explicacoes": ["Pressão, temperatura e caudal baixos no sistema de vapor, associados a uma combustão não normal."]
-    }
-    ```
-
-### Caso 2: Ativação da Regra 2 (Produção Insuficiente por Turbina)
-*   **JSON de Entrada (Request)**:
-    ```json
-    {
-      "sistemaVapor": {
-        "pressao": "Baixa",
-        "temperatura": "Baixa",
-        "caudal": "Baixo",
-        "turbinaForneceCalorSuficiente": "Nao"
-      },
-      "sistemaCombustao": {
-        "combustaoNormal": "Sim",
-        "chamaDetetada": "Sim",
-        "gasDisponivel": "Sim",
-        "pressaoGasSuficiente": "Sim"
-      }
-    }
-    ```
-*   **JSON de Saída (Response)**:
-    ```json
-    {
-      "tipoAnomalia": "Anomalia na Produção de Vapor",
-      "problema": "ProducaoInsuficientePorTurbina",
-      "conclusao": "A produção de vapor está insuficiente devido a calor insuficiente fornecido pela turbina, apesar de a combustão estar normal.",
-      "regrasAtivadas": ["Regra 2"],
-      "explicacoes": ["Pressão, temperatura e caudal baixos no sistema de vapor, com combustão normal, mas sem calor suficiente fornecido pela turbina."]
-    }
-    ```
-
-### Caso 3: Ativação da Regra 3 (Falha no Fornecimento de Gás)
-*   **JSON de Entrada (Request)**:
-    ```json
-    {
-      "sistemaVapor": {
-        "pressao": "Normal",
-        "temperatura": "Normal",
-        "caudal": "Normal",
-        "turbinaForneceCalorSuficiente": "Sim"
-      },
-      "sistemaCombustao": {
-        "combustaoNormal": "Nao",
-        "chamaDetetada": "Nao",
-        "gasDisponivel": "Nao",
-        "pressaoGasSuficiente": "Nao"
-      }
-    }
-    ```
-*   **JSON de Saída (Response)**:
-    ```json
-    {
-      "tipoAnomalia": "Anomalia no Sistema de Combustão",
-      "problema": "FalhaFornecimentoGas",
-      "conclusao": "Falha crítica de combustão devido à falta completa de fornecimento de gás (gás indisponível e ausência de chama).",
-      "regrasAtivadas": ["Regra 3"],
-      "explicacoes": ["Chama não detectada associada a gás indisponível no sistema."]
-    }
-    ```
-
-### Caso 4: Ativação da Regra 4 (Pressão de Gás Insuficiente)
-*   **JSON de Entrada (Request)**:
-    ```json
-    {
-      "sistemaVapor": {
-        "pressao": "Normal",
-        "temperatura": "Normal",
-        "caudal": "Normal",
-        "turbinaForneceCalorSuficiente": "Sim"
-      },
-      "sistemaCombustao": {
-        "combustaoNormal": "Nao",
-        "chamaDetetada": "Nao",
-        "gasDisponivel": "Sim",
-        "pressaoGasSuficiente": "Nao"
-      }
-    }
-    ```
-*   **JSON de Saída (Response)**:
-    ```json
-    {
-      "tipoAnomalia": "Anomalia no Sistema de Combustão",
-      "problema": "PressaoGasInsuficiente",
-      "conclusao": "Ausência de chama devido a pressão de gás insuficiente, embora haja gás disponível na linha.",
-      "regrasAtivadas": ["Regra 4"],
-      "explicacoes": ["Chama não detectada com gás disponível mas pressão de gás insuficiente."]
-    }
-    ```

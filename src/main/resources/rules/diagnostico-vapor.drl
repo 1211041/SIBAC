@@ -1,68 +1,1032 @@
 package rules;
 
 import pt.isep.sbc.model.SistemaVapor;
-import pt.isep.sbc.model.SistemaCombustao;
 import pt.isep.sbc.model.Diagnostico;
 
-rule "Regra 1 - Producao Insuficiente Por Combustao"
+/*
+ * ============================================================
+ *  SIBAC — Base de Conhecimento: Diagnóstico da Produção de Vapor
+ * ============================================================
+ *
+ *  Organização das regras (por combinação de P/T/C):
+ *
+ *  GRUPO 1 — P↓ T↓ C↓  (produção global insuficiente)
+ *  GRUPO 2 — P↓ T↓ C Normal (energia térmica insuficiente)
+ *  GRUPO 3 — P↓ T Normal C↓ (restrição ou produção parcial)
+ *  GRUPO 4 — P↓ T Normal C Normal (perda de pressão)
+ *  GRUPO 5 — P Normal T↓ C Normal (problema térmico localizado)
+ *  GRUPO 6 — P Normal T Normal C↓ (caudal insuficiente)
+ *  GRUPO 7 — P↑ T↑ (produção excessiva / sobreaquecimento)
+ *  GRUPO 8 — P↑ T Normal (acumulação de pressão)
+ *  GRUPO 9 — P Normal T↑ C Normal (sobreaquecimento do vapor)
+ *  GRUPO 10 — Situação contraditória (erro de instrumentação)
+ *
+ *  Cada regra verifica problema == null para garantir que
+ *  apenas a primeira causa identificada prevalece (FCFS).
+ * ============================================================
+ */
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 1 — Pressão ↓  Temperatura ↓  Caudal ↓
+//  Interpretação: Produção global insuficiente
+// ════════════════════════════════════════════════════════════
+
+rule "V-1.1 — Produção Insuficiente por Combustão Anormal"
+    salience 90
     when
-        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo")
-        $c : SistemaCombustao(combustaoNormal == "Nao")
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo",
+                          combustaoNormal == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia na Produção de Vapor");
         $d.setProblema("ProducaoInsuficientePorCombustao");
-        $d.setConclusao("A produção de vapor está insuficiente devido a uma falha detectada no sistema de combustão (combustão anormal).");
-        $d.addRegraAtivada("Regra 1", "Pressão, temperatura e caudal baixos no sistema de vapor, associados a uma combustão não normal.");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor globalmente insuficiente (P↓ T↓ C↓) causada por combustão anormal. " +
+                        "Ação: verificar queimadores, disponibilidade de gás e sistema de ignição.");
+        $d.addRegraAtivada("V-1.1",
+                "Pressão, temperatura e caudal baixos com combustão não normal → causa raiz no sistema de combustão.");
         update($d);
 end
 
-rule "Regra 2 - Producao Insuficiente Por Turbina"
+rule "V-1.2 — Produção Insuficiente por Turbina sem Calor Suficiente"
+    salience 85
     when
-        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo", turbinaForneceCalorSuficiente == "Nao")
-        $c : SistemaCombustao(combustaoNormal == "Sim")
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia na Produção de Vapor");
         $d.setProblema("ProducaoInsuficientePorTurbina");
-        $d.setConclusao("A produção de vapor está insuficiente devido a calor insuficiente fornecido pela turbina, apesar de a combustão estar normal.");
-        $d.addRegraAtivada("Regra 2", "Pressão, temperatura e caudal baixos no sistema de vapor, com combustão normal, mas sem calor suficiente fornecido pela turbina.");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor insuficiente apesar da combustão normal. A turbina não fornece calor suficiente. " +
+                        "Ação: verificar carga e eficiência do turbogerador.");
+        $d.addRegraAtivada("V-1.2",
+                "P↓ T↓ C↓, combustão OK mas turbina sem calor suficiente → falha no turbogerador.");
         update($d);
 end
 
-rule "Regra 6 - Sobreaquecimento Vapor"
+rule "V-1.3 — Produção Insuficiente por Falha no BFW"
+    salience 80
     when
-        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta")
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Sim",
+                          alimentacaoBFWCorreta == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia na Produção de Vapor");
-        $d.setProblema("SobreaquecimentoVapor");
-        $d.setConclusao("Sobreaquecimento do vapor detetado devido a pressão e temperatura excessivamente elevadas na caldeira.");
-        $d.addRegraAtivada("Regra 6", "Pressão e temperatura altas no sistema de vapor, indicando sobreaquecimento (pressão excessiva).");
+        $d.setProblema("ProducaoInsuficientePorBFW");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor insuficiente com combustão e turbina OK. Falha na alimentação de água à caldeira (BFW). " +
+                        "Ação: verificar bombas BFW, válvulas de alimentação e nível de água no desaerador.");
+        $d.addRegraAtivada("V-1.3",
+                "P↓ T↓ C↓, combustão e turbina OK, mas BFW com alimentação incorreta.");
         update($d);
 end
 
-rule "Regra 7 - Caudal Vapor Anormal"
+rule "V-1.4 — Produção Insuficiente por Nível do Barrilete Fora dos Limites"
+    salience 75
     when
-        $v : SistemaVapor(caudal == "Alto", pressao == "Normal", temperatura == "Normal")
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Sim",
+                          alimentacaoBFWCorreta == "Sim", nivelBarrileteDentroLimites == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia na Produção de Vapor");
-        $d.setProblema("CaudalVaporAnormal");
-        $d.setConclusao("Caudal de vapor anormalmente elevado com pressão e temperatura normais, indicando possível anomalia no controlo de caudal.");
-        $d.addRegraAtivada("Regra 7", "Caudal alto no sistema de vapor com pressão e temperatura normais, sugerindo caudal excessivo.");
+        $d.setProblema("ProducaoInsuficientePorNivelBarrilete");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor insuficiente com BFW OK. Nível do barrilete fora dos limites operacionais. " +
+                        "Ação: verificar controlo de nível do barrilete e possíveis fugas internas.");
+        $d.addRegraAtivada("V-1.4",
+                "P↓ T↓ C↓, combustão/turbina/BFW OK, mas nível do barrilete fora dos limites.");
         update($d);
 end
 
-rule "Regra 8 - Queda Brusca Pressao Vapor"
+rule "V-1.5 — Produção Insuficiente por Falha no Sistema de Controlo"
+    salience 70
     when
-        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal", turbinaForneceCalorSuficiente == "Sim")
-        $c : SistemaCombustao(combustaoNormal == "Sim")
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Sim",
+                          alimentacaoBFWCorreta == "Sim", nivelBarrileteDentroLimites == "Sim",
+                          sistemaControloAtuaCorretamente == "Nao")
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia na Produção de Vapor");
-        $d.setProblema("QuedaPressaoVapor");
-        $d.setConclusao("Queda brusca de pressão de vapor com temperatura, caudal e combustão normais, sugerindo possível fuga no sistema.");
-        $d.addRegraAtivada("Regra 8", "Pressão baixa no sistema de vapor com temperatura e caudal normais, combustão normal e calor da turbina suficiente, indicando possível fuga.");
+        $d.setProblema("ProducaoInsuficientePorFalhaControlo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor insuficiente sem causa física identificada. Sistema de controlo a atuar incorretamente. " +
+                        "Ação: verificar setpoints, PID e atuadores do sistema de controlo da caldeira.");
+        $d.addRegraAtivada("V-1.5",
+                "P↓ T↓ C↓, todos os subsistemas OK exceto o sistema de controlo.");
         update($d);
 end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 2 — Pressão ↓  Temperatura ↓  Caudal Normal
+//  Interpretação: Energia térmica insuficiente
+// ════════════════════════════════════════════════════════════
+
+rule "V-2.1 — Energia Térmica Insuficiente por Combustão Deficiente"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Normal",
+                          combustaoNormal == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("BaixaPressaoTemperaturaPorCombustaoDeficiente");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão e temperatura baixas com caudal normal indicam energia térmica insuficiente por combustão deficiente. " +
+                        "Ação: verificar queimadores, relação ar/combustível e caudal de gás.");
+        $d.addRegraAtivada("V-2.1",
+                "P↓ T↓ C Normal → energia térmica insuficiente com combustão anormal.");
+        update($d);
+end
+
+rule "V-2.2 — Energia Térmica Insuficiente por Turbina"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Normal",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("BaixaPressaoTemperaturaPorInsuficienciaTurbina");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão e temperatura baixas com caudal normal e combustão OK. Turbina não fornece calor suficiente à caldeira. " +
+                        "Ação: verificar carga da turbina e temperatura dos gases de escape.");
+        $d.addRegraAtivada("V-2.2",
+                "P↓ T↓ C Normal, combustão OK mas turbina insuficiente → problema no turbogerador.");
+        update($d);
+end
+
+rule "V-2.3 — Temperatura Baixa por Arrefecimento Excessivo no Dessobreaquecedor"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Normal",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Sim",
+                          dessobreaquecedorAbertoEmExcesso == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaBaixaPorArrefecimentoExcessivo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura baixa causada pelo dessobreaquecedor aberto em excesso, provocando arrefecimento excessivo do vapor. " +
+                        "Ação: reduzir abertura do dessobreaquecedor e verificar setpoint de temperatura.");
+        $d.addRegraAtivada("V-2.3",
+                "P↓ T↓ C Normal, combustão e turbina OK, dessobreaquecedor aberto em excesso.");
+        update($d);
+end
+
+rule "V-2.4 — Erro de Instrumentação (sensores incoerentes, P↓ T↓ C Normal)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Normal",
+                          sensoresCoerentes == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leituras de pressão e temperatura baixas com caudal normal mas sensores incoerentes. Possível falha de instrumentação. " +
+                        "Ação: verificar calibração e integridade dos transmissores de pressão e temperatura.");
+        $d.addRegraAtivada("V-2.4",
+                "P↓ T↓ C Normal com sensores incoerentes → suspeita de erro de instrumentação.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 3 — Pressão ↓  Temperatura Normal  Caudal ↓
+//  Interpretação: Produção parcial insuficiente ou restrição
+// ════════════════════════════════════════════════════════════
+
+rule "V-3.1 — Baixo Caudal e Pressão por Válvula de Saída Fechada"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Baixo",
+                          valvulasVaporTotalmenteAbertas == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("BaixoCaudalPressaoPorValvulaFechada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão e caudal baixos com temperatura normal. Válvula(s) de saída de vapor não totalmente abertas. " +
+                        "Ação: verificar posição e atuador das válvulas de saída da caldeira.");
+        $d.addRegraAtivada("V-3.1",
+                "P↓ T Normal C↓, válvulas de vapor não totalmente abertas → restrição mecânica.");
+        update($d);
+end
+
+rule "V-3.2 — Baixo Caudal e Pressão por Restrição na Linha de Vapor"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Baixo",
+                          valvulasVaporTotalmenteAbertas == "Sim", restricaoLinhaVapor == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("BaixoCaudalPressaoPorRestricaoLinha");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Restrição detetada na linha de distribuição de vapor com válvulas abertas. " +
+                        "Ação: inspecionar linha de vapor para depósitos, corpos estranhos ou válvulas parcialmente fechadas.");
+        $d.addRegraAtivada("V-3.2",
+                "P↓ T Normal C↓, válvulas abertas mas restrição detetada na linha de vapor.");
+        update($d);
+end
+
+rule "V-3.3 — Baixo Caudal e Pressão por Produção Insuficiente"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Baixo",
+                          valvulasVaporTotalmenteAbertas == "Sim", restricaoLinhaVapor == "Nao",
+                          combustaoNormal == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("BaixoCaudalPressaoPorProducaoInsuficiente");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal e pressão baixos sem restrições físicas na linha. A produção é insuficiente por combustão deficiente. " +
+                        "Ação: aumentar carga de combustão e verificar o estado dos queimadores.");
+        $d.addRegraAtivada("V-3.3",
+                "P↓ T Normal C↓, sem restrições na linha mas combustão anormal.");
+        update($d);
+end
+
+rule "V-3.4 — Erro no Medidor de Caudal (P↓ T Normal C↓)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Baixo",
+                          medidorCaudalCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacaoCaudal");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leitura de caudal baixa possivelmente incorreta. Medidor de caudal com falha. " +
+                        "Ação: verificar calibração, obstruções no elemento primário e integridade do transmissor de caudal.");
+        $d.addRegraAtivada("V-3.4",
+                "P↓ T Normal C↓ com medidor de caudal com falha → suspeita de erro de instrumentação.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 4 — Pressão ↓  Temperatura Normal  Caudal Normal
+//  Interpretação: Perda de pressão
+// ════════════════════════════════════════════════════════════
+
+rule "V-4.1 — Perda de Pressão por Válvula Aberta Indevidamente"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal",
+                          valvulaAbertaIndevidamente == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PerdaPressaoPorValvulaAbertaIndevidamente");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Queda de pressão com caudal e temperatura normais. Válvula aberta indevidamente a drenar pressão. " +
+                        "Ação: identificar e fechar a válvula aberta de forma indevida.");
+        $d.addRegraAtivada("V-4.1",
+                "P↓ T Normal C Normal com válvula aberta indevidamente → fuga de pressão.");
+        update($d);
+end
+
+rule "V-4.2 — Perda de Pressão por Fuga na Linha de Vapor"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal",
+                          valvulaAbertaIndevidamente == "Nao", fugaLinhaVapor == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PerdaPressaoPorFugaLinha");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Queda de pressão com fuga confirmada na linha de vapor. " +
+                        "Ação: localizar e isolar o ponto de fuga. Verificar juntas, flanges e válvulas de purga.");
+        $d.addRegraAtivada("V-4.2",
+                "P↓ T Normal C Normal, sem válvula indevida, mas fuga confirmada na linha.");
+        update($d);
+end
+
+rule "V-4.3 — Queda de Pressão por Aumento de Consumo"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal",
+                          valvulaAbertaIndevidamente == "Nao", fugaLinhaVapor == "Nao",
+                          consumoVapor == "Aumentou")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("QuedaPressaoPorAumentoConsumo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Queda de pressão causada por aumento súbito do consumo de vapor no processo. " +
+                        "Ação: aumentar a produção de vapor ou reduzir a carga nos consumidores.");
+        $d.addRegraAtivada("V-4.3",
+                "P↓ T Normal C Normal, sem fugas/válvulas, consumo de vapor aumentado.");
+        update($d);
+end
+
+rule "V-4.4 — Erro no Sensor de Pressão (P↓ T Normal C Normal)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal",
+                          sensorPressaoCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacaoPressao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leitura de pressão baixa com temperatura e caudal normais. Sensor de pressão provavelmente com falha. " +
+                        "Ação: verificar sensor de pressão, tubagem de impulso e transmissor.");
+        $d.addRegraAtivada("V-4.4",
+                "P↓ T Normal C Normal com sensor de pressão com falha → erro de instrumentação.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 5 — Pressão Normal  Temperatura ↓  Caudal Normal
+//  Interpretação: Problema térmico localizado
+// ════════════════════════════════════════════════════════════
+
+rule "V-5.1 — Temperatura Baixa por Combustão Insuficiente"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Baixa", caudal == "Normal",
+                          combustaoNormal == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaBaixaPorCombustaoInsuficiente");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura do vapor baixa com pressão e caudal normais. Combustão insuficiente é a causa do défice térmico. " +
+                        "Ação: verificar queimadores, caudal de gás e relação ar/combustível.");
+        $d.addRegraAtivada("V-5.1",
+                "P Normal T↓ C Normal com combustão anormal → défice térmico por combustão.");
+        update($d);
+end
+
+rule "V-5.2 — Temperatura Baixa por Baixa Carga da Turbina"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Baixa", caudal == "Normal",
+                          combustaoNormal == "Sim", turbinaForneceCalorSuficiente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaBaixaPorBaixaCargaTurbina");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura baixa com pressão e caudal normais e combustão OK. A turbina não fornece calor suficiente. " +
+                        "Ação: verificar carga elétrica do turbogerador e temperatura dos gases de escape.");
+        $d.addRegraAtivada("V-5.2",
+                "P Normal T↓ C Normal, combustão OK mas turbina não fornece calor suficiente.");
+        update($d);
+end
+
+rule "V-5.3 — Temperatura Baixa por Dessobreaquecedor Aberto em Excesso"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Baixa", caudal == "Normal",
+                          dessobreaquecedorAbertoEmExcesso == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaBaixaPorDessobreaquecedor");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura do vapor baixa causada pelo dessobreaquecedor aberto em excesso. " +
+                        "Ação: reduzir o caudal de água de injeção no dessobreaquecedor e verificar controlador de temperatura.");
+        $d.addRegraAtivada("V-5.3",
+                "P Normal T↓ C Normal com dessobreaquecedor aberto em excesso → arrefecimento excessivo.");
+        update($d);
+end
+
+rule "V-5.4 — Erro no Sensor de Temperatura (P Normal T↓ C Normal)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Baixa", caudal == "Normal",
+                          sensorTemperaturaCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacaoTemperatura");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leitura de temperatura baixa com pressão e caudal normais. Possível falha no sensor de temperatura. " +
+                        "Ação: verificar termopar/RTD e transmissor de temperatura.");
+        $d.addRegraAtivada("V-5.4",
+                "P Normal T↓ C Normal com sensor de temperatura com falha → erro de instrumentação.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 6 — Pressão Normal  Temperatura Normal  Caudal ↓
+//  Interpretação: Caudal insuficiente
+// ════════════════════════════════════════════════════════════
+
+rule "V-6.1 — Caudal Baixo por Válvula de Saída Fechada"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Baixo",
+                          valvulasVaporTotalmenteAbertas == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("CaudalBaixoPorValvulaSaidaFechada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal de vapor baixo com pressão e temperatura normais. Válvula(s) de saída não totalmente abertas. " +
+                        "Ação: verificar posição e atuador das válvulas de saída.");
+        $d.addRegraAtivada("V-6.1",
+                "P Normal T Normal C↓ com válvulas de vapor não totalmente abertas.");
+        update($d);
+end
+
+rule "V-6.2 — Caudal Baixo por Restrição na Linha de Distribuição"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Baixo",
+                          valvulasVaporTotalmenteAbertas == "Sim", restricaoLinhaVapor == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("CaudalBaixoPorRestricaoLinha");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal baixo com pressão e temperatura normais e válvulas abertas. Restrição na linha de distribuição. " +
+                        "Ação: inspecionar linha para depósitos ou obstruções, verificar filtros e purgadores.");
+        $d.addRegraAtivada("V-6.2",
+                "P Normal T Normal C↓, válvulas abertas mas restrição na linha.");
+        update($d);
+end
+
+rule "V-6.3 — Caudal Baixo por Redução da Procura de Vapor"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Baixo",
+                          consumoVapor == "Diminuiu")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("CaudalBaixoPorReducaoProcura");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal de vapor baixo com pressão e temperatura normais. Redução da procura no processo. " +
+                        "Ação: confirmar com os utilizadores de vapor se existe redução de carga prevista. Situação normal se intencional.");
+        $d.addRegraAtivada("V-6.3",
+                "P Normal T Normal C↓ com consumo de vapor diminuído → redução da procura.");
+        update($d);
+end
+
+rule "V-6.4 — Erro no Medidor de Caudal (P Normal T Normal C↓)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Baixo",
+                          medidorCaudalCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacaoCaudal");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leitura de caudal baixa com pressão e temperatura normais. Possível falha no medidor de caudal. " +
+                        "Ação: verificar medidor de caudal, placa de orifício e transmissor diferencial.");
+        $d.addRegraAtivada("V-6.4",
+                "P Normal T Normal C↓ com medidor de caudal com falha → erro de instrumentação.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 7 — Pressão ↑  Temperatura ↑
+//  Interpretação: Produção excessiva / sobreaquecimento
+// ════════════════════════════════════════════════════════════
+
+rule "V-7.1 — Produção Excessiva por Combustão Excessiva"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta", caudal == "Alto",
+                          combustaoNormal == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ProducaoExcessivaPorCombustao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor excessiva (P↑ T↑ C↑) causada por combustão excessiva. " +
+                        "Ação: reduzir caudal de gás, verificar controlador de combustão e válvula de controlo de gás.");
+        $d.addRegraAtivada("V-7.1",
+                "P↑ T↑ C↑ com combustão anormal → produção excessiva por excesso de combustão.");
+        update($d);
+end
+
+rule "V-7.2 — Pressão e Temperatura Altas por Redução do Consumo"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta", caudal == "Normal",
+                          consumoVapor == "Diminuiu")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PressaoAltaPorReducaoConsumo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão e temperatura altas por redução súbita do consumo de vapor no processo. " +
+                        "Ação: reduzir produção de vapor ou abrir válvula de alívio de pressão.");
+        $d.addRegraAtivada("V-7.2",
+                "P↑ T↑ C Normal com consumo de vapor reduzido.");
+        update($d);
+end
+
+rule "V-7.3 — Sobreaquecimento por Falha no Sistema de Controlo"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta",
+                          sistemaControloAtuaCorretamente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("SobreproducaoPorFalhaControlo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão e temperatura excessivas com sistema de controlo com falha. " +
+                        "Ação: verificar controladores de pressão e temperatura, forçar modo manual se necessário.");
+        $d.addRegraAtivada("V-7.3",
+                "P↑ T↑ com sistema de controlo com falha → sobreaquecimento por perda de controlo.");
+        update($d);
+end
+
+rule "V-7.4 — Erro de Instrumentação (P↑ T↑ — sensores incoerentes)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta",
+                          sensoresCoerentes == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leituras de pressão e temperatura altas com sensores incoerentes entre si. Possível falha de instrumentação. " +
+                        "Ação: verificar calibração cruzada de sensores e comparar com leituras redundantes.");
+        $d.addRegraAtivada("V-7.4",
+                "P↑ T↑ com sensores incoerentes → possível erro de instrumentação.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 8 — Pressão ↑  Temperatura Normal
+//  Interpretação: Acumulação de pressão
+// ════════════════════════════════════════════════════════════
+
+rule "V-8.1 — Acumulação de Pressão por Baixo Consumo"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Normal",
+                          consumoVapor == "Baixo")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("AcumulacaoPressaoPorBaixoConsumo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Acumulação de pressão com temperatura normal por consumo de vapor muito baixo. " +
+                        "Ação: reduzir produção de vapor ou verificar consumidores de processo.");
+        $d.addRegraAtivada("V-8.1",
+                "P↑ T Normal com consumo de vapor baixo → acumulação por desequilíbrio produção/consumo.");
+        update($d);
+end
+
+rule "V-8.2 — Acumulação de Pressão por Restrição na Saída"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Normal",
+                          valvulasVaporTotalmenteAbertas == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("AcumulacaoPressaoPorRestricaoSaida");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Acumulação de pressão por válvula(s) de saída de vapor parcialmente fechada(s). " +
+                        "Ação: verificar e abrir totalmente as válvulas de saída.");
+        $d.addRegraAtivada("V-8.2",
+                "P↑ T Normal com válvulas de saída não totalmente abertas → restrição de saída.");
+        update($d);
+end
+
+rule "V-8.3 — Acumulação de Pressão por Falha no Controlo de Pressão"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Normal",
+                          controloPressaoAtuaCorretamente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("AcumulacaoPressaoPorFalhaControlo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Acumulação de pressão causada por falha no sistema de controlo de pressão. " +
+                        "Ação: verificar controlador de pressão, válvula de controlo e setpoint.");
+        $d.addRegraAtivada("V-8.3",
+                "P↑ T Normal com controlo de pressão com falha → acumulação por perda de regulação.");
+        update($d);
+end
+
+rule "V-8.4 — Erro no Sensor de Pressão (P↑ T Normal)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Normal",
+                          sensorPressaoCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacaoPressao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leitura de pressão alta com temperatura normal. Possível falha no sensor de pressão. " +
+                        "Ação: verificar sensor de pressão, comparar com manómetro local redundante.");
+        $d.addRegraAtivada("V-8.4",
+                "P↑ T Normal com sensor de pressão com falha → possível leitura falsa.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 9 — Pressão Normal  Temperatura ↑  Caudal Normal
+//  Interpretação: Sobreaquecimento do vapor
+// ════════════════════════════════════════════════════════════
+
+rule "V-9.1 — Sobreaquecimento por Falha no Dessobreaquecedor"
+    salience 90
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Alta", caudal == "Normal",
+                          dessobreaquecedorAtuaCorretamente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaAltaPorFalhaDessobreaquecedor");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura do vapor excessiva causada por falha no dessobreaquecedor (sem arrefecimento). " +
+                        "Ação: verificar válvula de injeção de água, controlador de temperatura e bomba de dessobreaquecimento.");
+        $d.addRegraAtivada("V-9.1",
+                "P Normal T↑ C Normal com dessobreaquecedor com falha → sobreaquecimento por perda de arrefecimento.");
+        update($d);
+end
+
+rule "V-9.2 — Sobreaquecimento por Excesso Térmico da Combustão"
+    salience 85
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Alta", caudal == "Normal",
+                          combustaoNormal == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaAltaPorExcessoTermicoCombustao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura do vapor excessiva causada por excesso térmico do sistema de combustão. " +
+                        "Ação: reduzir carga de combustão e verificar o sistema de controlo de temperatura.");
+        $d.addRegraAtivada("V-9.2",
+                "P Normal T↑ C Normal com combustão anormal → sobreaquecimento por excesso de calor.");
+        update($d);
+end
+
+rule "V-9.3 — Sobreaquecimento por Alta Carga Térmica da Turbina"
+    salience 80
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Alta", caudal == "Normal",
+                          turbinaForneceCalorSuficiente == "Sim",
+                          dessobreaquecedorAtuaCorretamente == "Sim",
+                          combustaoNormal == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("TemperaturaAltaPorAltaCargaTurbina");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura excessiva sem falhas identificadas nos sistemas de controlo. " +
+                        "Possível sobrecarga térmica proveniente dos gases de escape da turbina. " +
+                        "Ação: verificar temperatura de escape da turbina e condições operacionais da caldeira de recuperação.");
+        $d.addRegraAtivada("V-9.3",
+                "P Normal T↑ C Normal com todos os sistemas OK → sobrecarga térmica da turbina.");
+        update($d);
+end
+
+rule "V-9.4 — Erro no Sensor de Temperatura (P Normal T↑ C Normal)"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Alta", caudal == "Normal",
+                          sensorTemperaturaCorreto == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacaoTemperatura");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leitura de temperatura alta com pressão e caudal normais. Possível falha no sensor de temperatura. " +
+                        "Ação: verificar termopar/RTD, comparar com medição local ou sonda de reserva.");
+        $d.addRegraAtivada("V-9.4",
+                "P Normal T↑ C Normal com sensor de temperatura com falha → possível leitura falsa.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  GRUPO 10 — Situação contraditória / não classificada
+// ════════════════════════════════════════════════════════════
+
+rule "V-10.1 — Situação Contraditória por Sensores Incoerentes"
+    salience 50
+    when
+        $v : SistemaVapor(sensoresCoerentes == "Nao", mudancaOperacionalRecente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ErroInstrumentacao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leituras de sensores incoerentes entre si sem alterações operacionais recentes. " +
+                        "Ação: verificar todos os instrumentos de pressão, temperatura e caudal. " +
+                        "Comparar com leituras locais e substituir instrumentação suspeita.");
+        $d.addRegraAtivada("V-10.1",
+                "Sensores incoerentes sem alteração operacional recente → falha de instrumentação.");
+        update($d);
+end
+
+rule "V-10.2 — Situação Contraditória por Mudança Operacional"
+    salience 50
+    when
+        $v : SistemaVapor(sensoresCoerentes == "Nao", mudancaOperacionalRecente == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("AlteracaoOperacional");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Leituras contraditórias associadas a uma mudança operacional recente. " +
+                        "Ação: rever as alterações efetuadas, aguardar estabilização do processo " +
+                        "e confirmar se os parâmetros convergem para valores nominais.");
+        $d.addRegraAtivada("V-10.2",
+                "Sensores incoerentes com mudança operacional recente → instabilidade transitória.");
+        update($d);
+end
+
+
+// ════════════════════════════════════════════════════════════
+//  REGRAS DE FALLBACK — Caminhos que chegam ao fim da árvore
+//  sem causa identificada automaticamente (requerem verificação
+//  manual) ou com causa implícita pelos dados agregados.
+//
+//  Correspondem aos nós terminais do diagrama de fluxo do
+//  relatório que não tinham regra DRL correspondente.
+// ════════════════════════════════════════════════════════════
+
+// ── Grupo 1 fallback ─────────────────────────────────────────
+rule "V-1.6 — Produção Insuficiente Sem Causa Evidente"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Baixo",
+                          combustaoNormal == "Sim",
+                          turbinaForneceCalorSuficiente == "Sim",
+                          alimentacaoBFWCorreta == "Sim",
+                          nivelBarrileteDentroLimites == "Sim",
+                          sistemaControloAtuaCorretamente == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("ProducaoInsuficienteSemCausaEvidente");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Produção de vapor insuficiente sem causa identificada automaticamente. " +
+                        "Todos os subsistemas reportam funcionamento normal. " +
+                        "Necessita verificação manual pelo técnico especialista: " +
+                        "inspecionar tubagem da caldeira, depósitos de incrustações e eficiência das superfícies de troca.");
+        $d.addRegraAtivada("V-1.6",
+                "P↓ T↓ C↓ com todos os subsistemas OK → causa não identificada, verificação manual.");
+        update($d);
+end
+
+// ── Grupo 2 fallback ─────────────────────────────────────────
+rule "V-2.5 — Perda de Eficiência Térmica na Caldeira"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Baixa", caudal == "Normal",
+                          sensoresCoerentes == "Sim",
+                          combustaoNormal == "Sim",
+                          turbinaForneceCalorSuficiente == "Sim",
+                          dessobreaquecedorAbertoEmExcesso == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PerdaEficienciaTermicaCaldeira");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Baixa pressão e temperatura com caudal normal e dessobreaquecedor OK. " +
+                        "Indica perda de eficiência da troca térmica na caldeira. " +
+                        "Ação: inspecionar superfícies de aquecimento, verificar incrustações " +
+                        "e realizar limpeza de tubagem.");
+        $d.addRegraAtivada("V-2.5",
+                "P↓ T↓ C Normal, combustão e turbina OK, dessobreaquecedor não em excesso → perda de eficiência térmica.");
+        update($d);
+end
+
+// ── Grupo 3 fallback ─────────────────────────────────────────
+rule "V-3.5 — Limitação Operacional na Distribuição de Vapor"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Baixo",
+                          medidorCaudalCorreto == "Sim",
+                          valvulasVaporTotalmenteAbertas == "Sim",
+                          restricaoLinhaVapor == "Nao",
+                          combustaoNormal == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("LimitacaoOperacionalDistribuicao");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal baixo com pressão baixa, temperatura normal, sem restrição e combustão OK. " +
+                        "Indica limitação operacional na rede de distribuição de vapor. " +
+                        "Ação: verificar consumo real dos processos, balanços de vapor " +
+                        "e possíveis purgas excessivas na linha.");
+        $d.addRegraAtivada("V-3.5",
+                "P↓ T Normal C↓ com todos os checks OK → limitação operacional na distribuição.");
+        update($d);
+end
+
+// ── Grupo 4 fallback ─────────────────────────────────────────
+rule "V-4.5 — Perda de Carga na Rede de Distribuição"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Baixa", temperatura == "Normal", caudal == "Normal",
+                          sensorPressaoCorreto == "Sim",
+                          valvulaAbertaIndevidamente == "Nao",
+                          fugaLinhaVapor == "Nao",
+                          consumoVapor == "Normal")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PerdaCargaEstaticaRede");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão baixa com temperatura e caudal normais, sem fuga e sem válvula aberta indevidamente. " +
+                        "Indica perda de carga estática na rede de distribuição. " +
+                        "Ação: verificar curvas de perda de carga da rede, estado das redutoras de pressão " +
+                        "e filtros na linha principal.");
+        $d.addRegraAtivada("V-4.5",
+                "P↓ T Normal C Normal sem causa direta → perda de carga estática na rede.");
+        update($d);
+end
+
+// ── Grupo 5 fallback ─────────────────────────────────────────
+rule "V-5.5 — Perda de Eficiência da Troca Térmica na Caldeira"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Baixa", caudal == "Normal",
+                          sensorTemperaturaCorreto == "Sim",
+                          combustaoNormal == "Sim",
+                          turbinaForneceCalorSuficiente == "Sim",
+                          dessobreaquecedorAbertoEmExcesso == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PerdaEficienciaTrocaTermica");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura baixa com pressão e caudal normais, combustão e turbina OK, " +
+                        "dessobreaquecedor sem excesso. Indica perda de eficiência da troca " +
+                        "térmica na caldeira. " +
+                        "Ação: inspecionar e limpar as superfícies de troca de calor; " +
+                        "verificar encharcamento de feixes tubulares.");
+        $d.addRegraAtivada("V-5.5",
+                "P Normal T↓ C Normal com todos os checks OK → perda de eficiência da troca térmica.");
+        update($d);
+end
+
+// ── Grupo 6 fallback ─────────────────────────────────────────
+rule "V-6.5 — Caudal Baixo por Causa Operacional Não Identificada"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Baixo",
+                          medidorCaudalCorreto == "Sim",
+                          valvulasVaporTotalmenteAbertas == "Sim",
+                          restricaoLinhaVapor == "Nao",
+                          consumoVapor == "Normal")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("CaudalBaixoNaoCausaIdentificada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal baixo sem causa imediata identificada. Pressão e temperatura normais, " +
+                        "válvulas abertas e sem restrição. " +
+                        "Necessita verificação manual: inspecionar traps de vapor, " +
+                        "verificar balanço de carga e possíveis by-passes abertos.");
+        $d.addRegraAtivada("V-6.5",
+                "P Normal T Normal C↓ com todos os checks OK → caudal baixo por causa operacional não identificada.");
+        update($d);
+end
+
+// ── Grupo 7 fallback ─────────────────────────────────────────
+rule "V-7.5 — Sobreaquecimento Operacional Sem Causa Identificada"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Alta",
+                          sensoresCoerentes == "Sim",
+                          sistemaControloAtuaCorretamente == "Sim",
+                          consumoVapor == "Normal",
+                          combustaoNormal == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("SobreaquecimentoOperacionalNaoCausaIdentificada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão e temperatura altas sem causa identificada automaticamente. " +
+                        "Sistemas de controlo e combustão reportam funcionamento normal. " +
+                        "Necessita verificação manual: verificar válvulas de alívio de pressão, " +
+                        "condições de carga do processo e estado do sobreaquecedor.");
+        $d.addRegraAtivada("V-7.5",
+                "P↑ T↑ com todos os checks OK → sobreaquecimento operacional, verificação manual.");
+        update($d);
+end
+
+// ── Grupo 8 fallback ─────────────────────────────────────────
+rule "V-8.5 — Pressão Acumulada por Condição Operacional Não Identificada"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Alta", temperatura == "Normal",
+                          sensorPressaoCorreto == "Sim",
+                          controloPressaoAtuaCorretamente == "Sim",
+                          valvulasVaporTotalmenteAbertas == "Sim",
+                          consumoVapor == "Normal")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("PressaoAcumuladaNaoCausaIdentificada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Pressão alta com temperatura normal e todos os sistemas de controlo OK. " +
+                        "Causa da acumulação de pressão não identificada automaticamente. " +
+                        "Necessita verificação manual: inspecionar válvulas de alívio, " +
+                        "confirmar condições de consumo a jusante e estado da rede.");
+        $d.addRegraAtivada("V-8.5",
+                "P↑ T Normal com controlo e sensores OK → pressão acumulada por condição operacional não identificada.");
+        update($d);
+end
+
+// ── Grupo 9 fallback ─────────────────────────────────────────
+rule "V-9.5 — Falha no Controlo Térmico da Caldeira"
+    salience 45
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Alta", caudal == "Normal",
+                          sensorTemperaturaCorreto == "Sim",
+                          dessobreaquecedorAtuaCorretamente == "Sim",
+                          combustaoNormal == "Sim",
+                          turbinaForneceCalorSuficiente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("FalhaControloTermicoCaldeira");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Temperatura alta com pressão e caudal normais, dessobreaquecedor OK e combustão normal. " +
+                        "A turbina não tem carga elevada — a causa é uma falha no controlo térmico da caldeira. " +
+                        "Ação: verificar controlador de temperatura, sensor de setpoint " +
+                        "e válvula de regulação do dessobreaquecedor.");
+        $d.addRegraAtivada("V-9.5",
+                "P Normal T↑ C Normal, combustão OK, dessobreaquecedor OK, turbina sem carga elevada → falha no controlo térmico.");
+        update($d);
+end
+
+// ── Grupo 11 — P Normal T Normal C Alto ──────────────────────
+rule "V-11.1 — Caudal de Vapor Excessivo"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Alto")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("CaudalExcessivoVapor");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Caudal de vapor excessivo com pressão e temperatura normais. " +
+                        "Indica aumento anormal do consumo de vapor no processo ou by-pass indevidamente aberto. " +
+                        "Ação: verificar consumidores de vapor, estado das válvulas de by-pass " +
+                        "e traps de vapor em falha aberta.");
+        $d.addRegraAtivada("V-11.1",
+                "P Normal T Normal C↑ → caudal excessivo por aumento de consumo ou by-pass aberto.");
+        update($d);
+end
+
+// ── Grupo 12 — Nominal Operation ──────────────────────────────
+rule "V-12.1 — Funcionamento Nominal do Sistema de Vapor"
+    salience 60
+    when
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Normal")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("FuncionamentoNominal");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("O sistema de produção de vapor está a funcionar dentro dos parâmetros nominais. " +
+                        "Não foram detetadas anomalias ativas pelo motor de diagnóstico.");
+        $d.addRegraAtivada("V-12.1",
+                "Pressão, temperatura e caudal normais → funcionamento nominal.");
+        update($d);
+end
+
+// ── Fallback Geral do Vapor ──────────────────────────────────
+rule "V-99.1 — Diagnóstico de Vapor Inconclusivo (Verificação Manual)"
+    salience 1
+    when
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("DiagnosticoVaporInconclusivo");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Não foi possível identificar uma causa específica para a anomalia reportada. " +
+                        "Os sintomas indicam um desvio dos parâmetros nominais, mas os checks automáticos foram inconclusivos. " +
+                        "Ação: realizar uma inspeção manual completa ao sistema de vapor e à instrumentação.");
+        $d.addRegraAtivada("V-99.1",
+                "Sintomas presentes mas nenhum diagnóstico específico ativado → verificação manual necessária.");
+        update($d);
+end
+
