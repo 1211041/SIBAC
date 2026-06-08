@@ -521,10 +521,11 @@ rule "C-B4.3 — Erro de Leitura da Temperatura de Combustão"
         update($d);
 end
 
-// ── Fallback Geral da Combustão ──────────────────────────────
+// ── Fallback Geral da Combustão (só dispara se houver facto SistemaCombustao na sessão) ──
 rule "C-99.1 — Diagnóstico de Combustão Inconclusivo (Verificação Manual)"
     salience 1
     when
+        $c : SistemaCombustao()
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia no Sistema de Combustão");
@@ -537,4 +538,5 @@ rule "C-99.1 — Diagnóstico de Combustão Inconclusivo (Verificação Manual)"
                 "Sintomas na combustão presentes mas inconclusivos → verificação manual necessária.");
         update($d);
 end
+
 

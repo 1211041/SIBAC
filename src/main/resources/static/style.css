@@ -353,6 +353,21 @@ body {
     pointer-events: none;
 }
 
+/* --- Threshold Reference Hint --- */
+.hint-ref {
+    display: inline-block;
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent-amber);
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.18);
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0.55rem;
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+}
+
 /* --- Diagnostic Result Card --- */
 .diagnostic-result {
     padding: 1rem 1.15rem;

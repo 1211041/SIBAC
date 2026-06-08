@@ -741,7 +741,7 @@ rule "V-10.1 — Situação Contraditória por Sensores Incoerentes"
         update($d);
 end
 
-rule "V-10.2 — Situação Contraditória por Mudança Operacional"
+rule "V-10.2 — Situação Contraditória por Mudança Operacional (sensores incoerentes)"
     salience 50
     when
         $v : SistemaVapor(sensoresCoerentes == "Nao", mudancaOperacionalRecente == "Sim")
@@ -755,6 +755,42 @@ rule "V-10.2 — Situação Contraditória por Mudança Operacional"
                         "e confirmar se os parâmetros convergem para valores nominais.");
         $d.addRegraAtivada("V-10.2",
                 "Sensores incoerentes com mudança operacional recente → instabilidade transitória.");
+        update($d);
+end
+
+rule "V-10.3 — Instabilidade Transitória (sensores coerentes + mudança operacional)"
+    salience 50
+    when
+        $v : SistemaVapor(sensoresCoerentes == "Sim", mudancaOperacionalRecente == "Sim")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("InstabilidadeTransitoriaOperacional");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Sensores coerentes mas parâmetros anormais associados a uma mudança operacional recente. " +
+                        "O sistema pode estar em transição — aguardar estabilização do processo. " +
+                        "Ação: monitorizar os parâmetros nos próximos minutos; se não estabilizarem, " +
+                        "rever os setpoints e as condições alteradas recentemente.");
+        $d.addRegraAtivada("V-10.3",
+                "Sensores coerentes + mudança operacional recente → instabilidade transitória.");
+        update($d);
+end
+
+rule "V-10.4 — Situação Não Classificada (sensores coerentes, sem mudança operacional)"
+    salience 50
+    when
+        $v : SistemaVapor(sensoresCoerentes == "Sim", mudancaOperacionalRecente == "Nao")
+        $d : Diagnostico(problema == null)
+    then
+        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
+        $d.setProblema("SituacaoNaoClassificada");
+        $d.setEstadoDiagnostico("Concluido");
+        $d.setConclusao("Os sensores reportam dados coerentes e não houve mudança operacional recente, " +
+                        "mas os parâmetros indicam uma condição não classificável automaticamente. " +
+                        "Situação não identificada — necessita verificação manual detalhada pelo técnico especialista: " +
+                        "inspecionar caldeira, circuitos hidráulicos e confirmar condições de processo.");
+        $d.addRegraAtivada("V-10.4",
+                "Sensores coerentes sem mudança operacional → situação não classificada, verificação manual.");
         update($d);
 end
 
@@ -996,15 +1032,18 @@ rule "V-11.1 — Caudal de Vapor Excessivo"
         update($d);
 end
 
-// ── Grupo 12 — Nominal Operation ──────────────────────────────
+// ── Grupo 12 — Funcionamento nominal (sem anomalia declarada, sem dados de sensores)
+// Só dispara quando os sensores não foram verificados (campo null),
+// ou seja, o utilizador selecionou P/T/C = Normal sem entrar no caminho contraditório
 rule "V-12.1 — Funcionamento Nominal do Sistema de Vapor"
     salience 60
     when
-        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Normal")
+        $v : SistemaVapor(pressao == "Normal", temperatura == "Normal", caudal == "Normal",
+                          sensoresCoerentes == null)
         $d : Diagnostico(problema == null)
     then
-        $d.setTipoAnomalia("Anomalia na Produção de Vapor");
-        $d.setProblema("FuncionamentoNominal");
+        $d.setTipoAnomalia("SemAnomalia");
+        $d.setProblema("SemAnomalia");
         $d.setEstadoDiagnostico("Concluido");
         $d.setConclusao("O sistema de produção de vapor está a funcionar dentro dos parâmetros nominais. " +
                         "Não foram detetadas anomalias ativas pelo motor de diagnóstico.");
@@ -1013,10 +1052,11 @@ rule "V-12.1 — Funcionamento Nominal do Sistema de Vapor"
         update($d);
 end
 
-// ── Fallback Geral do Vapor ──────────────────────────────────
+// ── Fallback Geral do Vapor (só dispara se houver facto SistemaVapor na sessão) ──
 rule "V-99.1 — Diagnóstico de Vapor Inconclusivo (Verificação Manual)"
     salience 1
     when
+        $v : SistemaVapor()
         $d : Diagnostico(problema == null)
     then
         $d.setTipoAnomalia("Anomalia na Produção de Vapor");

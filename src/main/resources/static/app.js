@@ -137,7 +137,9 @@
     // ──────────────────────────────────────
 
     function renderDiagnostic(data) {
-        const hasAnomaly = data.problema && data.problema !== null;
+        // "SemAnomalia" é o marcador especial da regra V-12.1 (funcionamento nominal)
+        const isNominal  = data.problema === 'SemAnomalia' || !data.problema;
+        const hasAnomaly = !isNominal;
         const wrapper = document.createElement('div');
         wrapper.className = 'message bot';
         let resultHTML;
@@ -172,12 +174,15 @@
                     </div>
                 </div>`;
         } else {
+            // Funcionamento nominal — mostrar conclusão do Drools ou mensagem genérica
+            const nominalMsg = (data.conclusao && data.conclusao.trim())
+                ? data.conclusao
+                : 'Todos os parâmetros analisados estão dentro dos valores esperados. Nenhuma anomalia foi identificada pelo motor de regras Drools.';
             resultHTML = `
                 <div class="diagnostic-result no-anomaly">
                     <div class="result-title">🟢 Diagnóstico Concluído — Sem Anomalias</div>
                     <div class="result-row">
-                        <span class="value">Todos os parâmetros analisados estão dentro dos valores esperados.
-                        Nenhuma anomalia foi identificada pelo motor de regras Drools.</span>
+                        <span class="value">${nominalMsg}</span>
                     </div>
                 </div>`;
         }
@@ -230,9 +235,18 @@
         addBotMessage('Vamos analisar o <strong>sistema de produção de vapor</strong>. 🌡️');
         await delay(400);
 
-        await ask('pressao',     'Qual é o estado da <strong>pressão de vapor</strong>?',  ['Baixa', 'Normal', 'Alta']);
-        await ask('temperatura', 'Qual é a <strong>temperatura do vapor</strong>?',         ['Baixa', 'Normal', 'Alta']);
-        await ask('caudal',      'Qual é o estado do <strong>caudal de vapor</strong>?',    ['Baixo', 'Normal', 'Alto']);
+        await ask('pressao',
+            'Qual é o estado da <strong>pressão de vapor</strong>?<br>' +
+            '<span class="hint-ref">💡 Baixa: &lt;45 bar &nbsp;·&nbsp; Normal: 45–60 bar &nbsp;·&nbsp; Alta: &gt;60 bar</span>',
+            ['Baixa', 'Normal', 'Alta']);
+        await ask('temperatura',
+            'Qual é a <strong>temperatura do vapor</strong>?<br>' +
+            '<span class="hint-ref">💡 Baixa: &lt;380 ºC &nbsp;·&nbsp; Normal: 380–450 ºC &nbsp;·&nbsp; Alta: &gt;450 ºC</span>',
+            ['Baixa', 'Normal', 'Alta']);
+        await ask('caudal',
+            'Qual é o estado do <strong>caudal de vapor</strong>?<br>' +
+            '<span class="hint-ref">💡 Baixo: &lt;80 t/h &nbsp;·&nbsp; Normal: 80–110 t/h &nbsp;·&nbsp; Alto: &gt;110 t/h</span>',
+            ['Baixo', 'Normal', 'Alto']);
 
         const p = answers.pressao, temp = answers.temperatura, c = answers.caudal;
 
@@ -366,9 +380,8 @@
         // ── G10: Contraditório/Raro ───────────────────────────────
         } else {
             await ask('sensoresCoerentes', 'As leituras dos <strong>sensores são coerentes</strong> entre si?', ['Sim', 'Nao']);
-            if (answers.sensoresCoerentes === 'Nao') {
-                await ask('mudancaOperacionalRecente', 'Houve uma <strong>mudança operacional recente</strong>?', ['Sim', 'Nao']);
-            }
+            // Sempre perguntar mudança operacional — necessário para classificar todos os ramos do diagrama
+            await ask('mudancaOperacionalRecente', 'Houve uma <strong>mudança operacional recente</strong> (ajuste de setpoint, arranque, paragem)?', ['Sim', 'Nao']);
         }
     }
 
@@ -446,7 +459,8 @@
             } else {
                 // ── B2/3/4: Chama estável — verificar temperatura ─
                 await ask('temperaturaCombustao',
-                    'Qual é a <strong>temperatura de combustão</strong>?',
+                    'Qual é a <strong>temperatura de combustão</strong>?<br>' +
+                    '<span class="hint-ref">💡 Baixa: &lt;850 ºC &nbsp;·&nbsp; Normal: 850–1000 ºC &nbsp;·&nbsp; Alta: &gt;1000 ºC</span>',
                     ['Baixa', 'Normal', 'Alta']);
 
                 const tc = answers.temperaturaCombustao;
@@ -454,7 +468,8 @@
                 if (tc === 'Normal') {
                     // ── B2: Temperatura normal — verificar consumo e controlo
                     await ask('consumoCombustivel',
-                        'O <strong>consumo de combustível</strong> está dentro do esperado?',
+                        'O <strong>consumo de combustível</strong> está dentro do esperado?<br>' +
+                        '<span class="hint-ref">💡 Normal: 90–110% do nominal &nbsp;·&nbsp; Alto: &gt;110% &nbsp;·&nbsp; Baixo: &lt;90%</span>',
                         ['Normal', 'Alto (acima do esperado)', 'Baixo (abaixo do esperado)']);
 
                     // Normalizar para valores simples
@@ -472,7 +487,10 @@
 
                 } else if (tc === 'Baixa') {
                     // ── B3: Temperatura baixa — verificar caudal e ar
-                    await ask('caudalGas', 'Qual é o <strong>caudal de gás</strong>?', ['Baixo', 'Normal', 'Alto']);
+                    await ask('caudalGas',
+                        'Qual é o <strong>caudal de gás</strong>?<br>' +
+                        '<span class="hint-ref">💡 Baixo: &lt;90% nominal &nbsp;·&nbsp; Normal: 90–110% &nbsp;·&nbsp; Alto: &gt;110%</span>',
+                        ['Baixo', 'Normal', 'Alto']);
 
                     if (answers.caudalGas !== 'Baixo') {
                         // Caudal OK mas temp baixa → verificar excesso de ar
@@ -484,7 +502,10 @@
 
                 } else {
                     // ── B4: Temperatura alta — verificar caudal e défice de ar
-                    await ask('caudalGas', 'Qual é o <strong>caudal de gás</strong>?', ['Baixo', 'Normal', 'Alto']);
+                    await ask('caudalGas',
+                        'Qual é o <strong>caudal de gás</strong>?<br>' +
+                        '<span class="hint-ref">💡 Baixo: &lt;90% nominal &nbsp;·&nbsp; Normal: 90–110% &nbsp;·&nbsp; Alto: &gt;110%</span>',
+                        ['Baixo', 'Normal', 'Alto']);
 
                     if (answers.caudalGas !== 'Alto') {
                         // Caudal não excessivo mas temp alta → verificar défice de ar
